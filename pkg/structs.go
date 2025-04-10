@@ -3,6 +3,7 @@ package chat
 import (
 	"net"
 	"sync"
+	"os"
 )
 
 // Maximum connections
@@ -41,4 +42,6 @@ type Server struct {
 	mu         sync.Mutex
 	clients    map[string]*Client
 	history    []string
+	logFile     *os.File
+
 }

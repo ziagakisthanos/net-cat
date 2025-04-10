@@ -17,6 +17,7 @@ func NewServer(listenAddr string) *Server {
 		listenAddr: listenAddr,
 		clients:    make(map[string]*Client),
 		history:    make([]string, 0),
+		logFile:    SetupLogFile(listenAddr),
 	}
 }
 
