@@ -48,6 +48,9 @@ func (s *Server) handleConnection(conn net.Conn) {
 	// Send welcome banner (Linux logo + prompt for name).
 	conn.Write([]byte(welcomeBanner))
 
+	var name string
+	var client *Client
+	for{
 	// Read the client's name.
 	nameLine, err := reader.ReadString('\n')
 	if err != nil {
@@ -55,11 +58,10 @@ func (s *Server) handleConnection(conn net.Conn) {
 		conn.Close()
 		return
 	}
-	name := strings.TrimSpace(nameLine)
+	name = strings.TrimSpace(nameLine)
 	if !isMessageValid([]byte(name)) {
-		conn.Write([]byte("Invalid name. Disconnecting.\n"))
-		conn.Close()
-		return
+		conn.Write([]byte("Invalid name. Please try again.\n"))
+		continue
 	}
 
 	// Lock the server state to check connection limits and uniqueness.
@@ -72,18 +74,19 @@ func (s *Server) handleConnection(conn net.Conn) {
 	}
 	if _, exists := s.clients[name]; exists {
 		s.mu.Unlock()
-		conn.Write([]byte("Name already taken. Disconnecting.\n"))
-		conn.Close()
-		return
+		conn.Write([]byte("Name already taken. Please choose a different name.\n"))
+		continue
 	}
 	// New client
-	client := &Client{
+	client = &Client{
 		name: name,
 		conn: conn,
 		out:  make(chan string, 10),
 	}
 	s.clients[name] = client
 	s.mu.Unlock()
+	break
+	}
 
 	// Send the full in-memory chat history to the new client.
 	for _, msg := range s.getHistory() {
