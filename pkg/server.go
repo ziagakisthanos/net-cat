@@ -68,7 +68,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 	s.mu.Lock()
 	if len(s.clients) >= maxClients {
 		s.mu.Unlock()
-		conn.Write([]byte("Server full. Please try again later.\n"))
+		conn.Write([]byte("Server full. Please try again later.\nConnection to server lost.\n"))
 		conn.Close()
 		return
 	}
@@ -115,6 +115,11 @@ func (s *Server) handleConnection(conn net.Conn) {
 			continue
 		}
 		trimmedMsg := strings.TrimSpace(msgLine)
+
+		if NameChange(trimmedMsg, s, client, &name) {
+		continue
+		}
+
 		formattedMsg := fmt.Sprintf("[%s][%s]: %s",
 			time.Now().Format("2006-01-02 15:04:05"),
 			name,
