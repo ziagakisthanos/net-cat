@@ -51,42 +51,42 @@ func (s *Server) handleConnection(conn net.Conn) {
 
 	var name string
 	var client *Client
-	for{
-	// Read the client's name.
-	nameLine, err := reader.ReadString('\n')
-	if err != nil {
-		log.Println("Error reading name:", err)
-		conn.Close()
-		return
-	}
-	name = strings.TrimSpace(nameLine)
-	if !isMessageValid([]byte(name)) {
-		conn.Write([]byte("Invalid name. Please try again.\n"))
-		continue
-	}
+	for {
+		// Read the client's name.
+		nameLine, err := reader.ReadString('\n')
+		if err != nil {
+			log.Println("Error reading name:", err)
+			conn.Close()
+			return
+		}
+		name = strings.TrimSpace(nameLine)
+		if !isMessageValid([]byte(name)) {
+			conn.Write([]byte("Invalid name. Please try again.\n"))
+			continue
+		}
 
-	// Lock the server state to check connection limits and uniqueness.
-	s.mu.Lock()
-	if len(s.clients) >= maxClients {
+		// Lock the server state to check connection limits and uniqueness.
+		s.mu.Lock()
+		if len(s.clients) >= maxClients {
+			s.mu.Unlock()
+			conn.Write([]byte("Server full. Please try again later.\nConnection to server lost.\n"))
+			conn.Close()
+			return
+		}
+		if _, exists := s.clients[name]; exists {
+			s.mu.Unlock()
+			conn.Write([]byte("Name already taken. Please choose a different name.\n"))
+			continue
+		}
+		// New client
+		client = &Client{
+			name: name,
+			conn: conn,
+			out:  make(chan string, 10),
+		}
+		s.clients[name] = client
 		s.mu.Unlock()
-		conn.Write([]byte("Server full. Please try again later.\nConnection to server lost.\n"))
-		conn.Close()
-		return
-	}
-	if _, exists := s.clients[name]; exists {
-		s.mu.Unlock()
-		conn.Write([]byte("Name already taken. Please choose a different name.\n"))
-		continue
-	}
-	// New client
-	client = &Client{
-		name: name,
-		conn: conn,
-		out:  make(chan string, 10),
-	}
-	s.clients[name] = client
-	s.mu.Unlock()
-	break
+		break
 	}
 
 	// Send the full in-memory chat history to the new client.
@@ -117,8 +117,12 @@ func (s *Server) handleConnection(conn net.Conn) {
 		}
 		trimmedMsg := strings.TrimSpace(msgLine)
 
-		if NameChange(trimmedMsg, s, client, &name) {
-		continue
+		if HelpCommand(trimmedMsg, client) {
+			continue
+		}
+
+		if NameCommand(trimmedMsg, s, client, &name) {
+			continue
 		}
 
 		formattedMsg := fmt.Sprintf("[%s][%s]: %s",

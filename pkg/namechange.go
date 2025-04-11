@@ -6,18 +6,34 @@ import (
 	"time"
 )
 
+func NamePrompt() string {
+	var sb strings.Builder
+	// ANSI escape sequence to clear the screen (if supported)
+	sb.WriteString("\n")
+	sb.WriteString("Usage:\n")
+	sb.WriteString("\033[1m-name\033[0m <new-name>\n")
+	return sb.String()
+}
+
 // NameChange processes a nickname change command.
 // If the received message starts with "-namechange ", it will attempt to change the client's nickname.
 // The parameter currentName is a pointer to the variable holding the client's current name.
 // Returns true if the message was processed as a nickname change (even if the change failed), false otherwise.
-func NameChange(command string, s *Server, client *Client, currentName *string) bool {
+func NameCommand(command string, s *Server, client *Client, currentName *string) bool {
 	// Check if the message begins with the command "/nick "
-	if !strings.HasPrefix(command, "-namechange ") {
+	if !(strings.HasPrefix(command, "-name ") || command == "-name") {
 		return false // not a nickname command; let the caller process it as a normal message.
 	}
 
 	// Extract the new name from the command.
-	newName := strings.TrimSpace(strings.TrimPrefix(command, "-namechange "))
+	newName := strings.TrimSpace(strings.TrimPrefix(command, "-name "))
+
+	//if new name is empty, prompt the user
+	if newName == "" {
+		client.out <- NamePrompt()
+		return true
+	}
+
 	if !isMessageValid([]byte(newName)) {
 		client.out <- "[SERVER]: Invalid new name. Please try again."
 		return true
