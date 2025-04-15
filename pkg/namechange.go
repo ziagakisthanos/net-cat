@@ -21,17 +21,21 @@ func NamePrompt() string {
 // Returns true if the message was processed as a nickname change (even if the change failed), false otherwise.
 func NameCommand(command string, s *Server, client *Client, currentName *string) bool {
 	// Check if the message begins with the command "/nick "
-	if !(strings.HasPrefix(command, "-name ") || command == "-name") {
-		return false // not a nickname command; let the caller process it as a normal message.
+	if !(strings.HasPrefix(command, "-name")) {
+		return false // not a name command; let the caller process it as a normal message.
 	}
 
 	// Extract the new name from the command.
-	newName := strings.TrimPrefix(command, "-name ")
+	newName := strings.TrimSpace(strings.TrimPrefix(command, "-name"))
+
+	if newName == "" {
+		client.out <- NamePrompt()
+		return true
+	}
 
 	//if new name is empty, prompt the user
 	if !isMessageValid([]byte(newName)) {
 		client.out <- "[SERVER]: Invalid new name. Please try again."
-		client.out <- NamePrompt()
 		return true
 	}
 

@@ -111,22 +111,23 @@ func (s *Server) handleConnection(conn net.Conn) {
 			}
 			break
 		}
+
+		trimmedMsg := strings.TrimSpace(msgLine)
+
 		if !isMessageValid([]byte(msgLine)) {
 			// Do not process empty messages.
 			continue
 		}
-		if strings.HasPrefix(msgLine, "-name") {
-			client.out <- NamePrompt()
-			continue
-		}
-		trimmedMsg := strings.TrimSpace(msgLine)
 
-		if HelpCommand(trimmedMsg, client) {
-			continue
-		}
+		//Handle tag commands
+		if strings.HasPrefix(trimmedMsg, "-") {
+			if HelpCommand(trimmedMsg, client) {
+				continue
+			}
 
-		if NameCommand(trimmedMsg, s, client, &name) {
-			continue
+			if NameCommand(trimmedMsg, s, client, &name) {
+				continue
+			}
 		}
 
 		formattedMsg := fmt.Sprintf("[%s][%s]: %s",
