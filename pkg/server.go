@@ -99,7 +99,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 	s.addHistory(joinMsg)
 	s.broadcast(joinMsg, "")
 
-	// Start the writer goroutine for this client.
+	// Start the writer goroutine for each client.
 	go s.clientWriter(client)
 
 	// Read loop
@@ -113,6 +113,10 @@ func (s *Server) handleConnection(conn net.Conn) {
 		}
 		if !isMessageValid([]byte(msgLine)) {
 			// Do not process empty messages.
+			continue
+		}
+		if strings.HasPrefix(msgLine, "-name") {
+			client.out <- NamePrompt()
 			continue
 		}
 		trimmedMsg := strings.TrimSpace(msgLine)

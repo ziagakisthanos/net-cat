@@ -26,16 +26,12 @@ func NameCommand(command string, s *Server, client *Client, currentName *string)
 	}
 
 	// Extract the new name from the command.
-	newName := strings.TrimSpace(strings.TrimPrefix(command, "-name "))
+	newName := strings.TrimPrefix(command, "-name ")
 
 	//if new name is empty, prompt the user
-	if newName == "" {
-		client.out <- NamePrompt()
-		return true
-	}
-
 	if !isMessageValid([]byte(newName)) {
 		client.out <- "[SERVER]: Invalid new name. Please try again."
+		client.out <- NamePrompt()
 		return true
 	}
 
