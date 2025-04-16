@@ -10,6 +10,4 @@ func isMessageValid(data []byte) bool {
 
 // TODO:
 // 		FIX	client message spawn twice
-//		ADD	private messages
-//		DELETE exclude feature
 //

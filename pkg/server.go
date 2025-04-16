@@ -114,18 +114,21 @@ func (s *Server) handleConnection(conn net.Conn) {
 
 		trimmedMsg := strings.TrimSpace(msgLine)
 
-		if !isMessageValid([]byte(msgLine)) {
+		if !isMessageValid([]byte(trimmedMsg)) {
 			// Do not process empty messages.
 			continue
 		}
 
 		//Handle tag commands
 		if strings.HasPrefix(trimmedMsg, "-") {
-			if HelpCommand(trimmedMsg, client) {
+			if WhisperCommand(trimmedMsg, s, client, name) {
 				continue
-			}
-
-			if NameCommand(trimmedMsg, s, client, &name) {
+			} else if HelpCommand(trimmedMsg, client) {
+				continue
+			} else if NameCommand(trimmedMsg, s, client, &name) {
+				continue
+			} else {
+				client.out <- trimmedMsg + " is not a chat command\n try -h for help"
 				continue
 			}
 		}
@@ -148,18 +151,21 @@ func (s *Server) handleConnection(conn net.Conn) {
 	conn.Close()
 }
 
-// broadcast sends message to all connected clients except (optionally) the one specified by 'exclude'.
-func (s *Server) broadcast(message, exclude string) {
+// broadcast sends a message to clients.
+// If target is empty, it broadcasts to all connected clients.
+// If target is non-empty, it sends the message only to the client with that name (private message).
+func (s *Server) broadcast(message, target string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	for clientName, client := range s.clients {
-		if clientName == exclude {
-			continue
+	//private message to target if specified
+	if target != "" {
+		if client, ok := s.clients[target]; ok {
+			client.out <- message
 		}
-		select {
-		case client.out <- message:
-		default:
-			// Skip if the client's outbound channel is full.
-		}
+		return
+	}
+	//broadcast to all clients.
+	for _, client := range s.clients {
+		client.out <- message
 	}
 }
