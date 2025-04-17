@@ -46,7 +46,7 @@ func (s *Server) Start() error {
 func (s *Server) handleConnection(conn net.Conn) {
 	// Use bufio to read from the connection.
 	reader := bufio.NewReader(conn)
-	// Send welcome banner (Linux logo + prompt for name).
+	// Send welcome banner + name prompt.
 	conn.Write([]byte(welcomeBanner))
 
 	var name string
@@ -97,13 +97,14 @@ func (s *Server) handleConnection(conn net.Conn) {
 	// Broadcast that a new client has joined.
 	joinMsg := fmt.Sprintf("[%s][SERVER]: %s joined our chat...", time.Now().Format("2006-01-02 15:04:05"), name)
 	s.addHistory(joinMsg)
-	s.broadcast(joinMsg, "", "")
+	s.broadcast(joinMsg, "")
 
 	// Start the writer goroutine for each client.
 	go s.clientWriter(client)
 
 	// Read loop
 	for {
+		//block the loop until user hits enter
 		msgLine, err := reader.ReadString('\n')
 		if err != nil {
 			if !errors.Is(err, io.EOF) {
@@ -138,7 +139,10 @@ func (s *Server) handleConnection(conn net.Conn) {
 			name,
 			trimmedMsg)
 		s.addHistory(formattedMsg)
-		s.broadcast(formattedMsg, "", name)
+		s.broadcast(formattedMsg, "")
+
+		// erase the user’s terminal “raw” echo
+		_, _ = client.conn.Write([]byte("\x1b[1A\r\x1b[K"))
 	}
 
 	// Client disconnects.
@@ -147,14 +151,14 @@ func (s *Server) handleConnection(conn net.Conn) {
 	s.mu.Unlock()
 	leaveMsg := fmt.Sprintf("[%s][SERVER]: %s left our chat...", time.Now().Format("2006-01-02 15:04:05"), name)
 	s.addHistory(leaveMsg)
-	s.broadcast(leaveMsg, "", "")
+	s.broadcast(leaveMsg, "")
 	conn.Close()
 }
 
 // broadcast sends a message to clients.
 // If target is empty, it broadcasts to all connected clients.
 // If target is non-empty, it sends the message only to the client with that name (private message).
-func (s *Server) broadcast(message, target, exclude string) {
+func (s *Server) broadcast(message, target string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	//private message to target if specified
@@ -165,10 +169,7 @@ func (s *Server) broadcast(message, target, exclude string) {
 		return
 	}
 	//broadcast to all clients.
-	for name, client := range s.clients {
-		if name == exclude {
-			continue
-		}
+	for _, client := range s.clients {
 		client.out <- message
 	}
 }

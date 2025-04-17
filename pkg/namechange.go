@@ -74,7 +74,7 @@ func NameCommand(command string, s *Server, client *Client, currentName *string)
 
 		// Add the nickname change message to history and broadcast it to all clients.
 		s.addHistory(nameChangeMsg)
-		s.broadcast(nameChangeMsg, "", "")
+		s.broadcast(nameChangeMsg, "")
 		return true
 	}
 	return false // not a name command; let the caller process it as a normal message.

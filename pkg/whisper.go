@@ -55,7 +55,7 @@ func WhisperCommand(command string, s *Server, client *Client, senderName string
 			msg)
 
 		// Use the server's broadcast function to send the message only to the specified target.
-		s.broadcast(formattedMessage, target, "")
+		s.broadcast(formattedMessage, target)
 		return true
 	}
 	return false

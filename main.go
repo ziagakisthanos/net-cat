@@ -26,6 +26,6 @@ func main() {
 	fmt.Println("Server online...")
 	err := server.Start()
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("Server error: %s", err)
 	}
 }

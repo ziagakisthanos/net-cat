@@ -7,7 +7,3 @@ func isMessageValid(data []byte) bool {
 	trimmed := strings.TrimSpace(string(data))
 	return len(trimmed) != 0
 }
-
-// TODO:
-// 		FIX	client message spawn twice
-//
