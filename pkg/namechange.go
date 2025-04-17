@@ -11,7 +11,7 @@ func NamePrompt() string {
 	// ANSI escape sequence to clear the screen.
 	sb.WriteString("\n")
 	sb.WriteString("Usage:\n")
-	sb.WriteString("\033[1m-name\033[0m <new-name>\n")
+	sb.WriteString("-name <new-name>\nor -n <new-name>")
 	return sb.String()
 }
 
@@ -74,7 +74,7 @@ func NameCommand(command string, s *Server, client *Client, currentName *string)
 
 		// Add the nickname change message to history and broadcast it to all clients.
 		s.addHistory(nameChangeMsg)
-		s.broadcast(nameChangeMsg, "")
+		s.broadcast(nameChangeMsg, "", "")
 		return true
 	}
 	return false // not a name command; let the caller process it as a normal message.

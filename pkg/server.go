@@ -97,7 +97,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 	// Broadcast that a new client has joined.
 	joinMsg := fmt.Sprintf("[%s][SERVER]: %s joined our chat...", time.Now().Format("2006-01-02 15:04:05"), name)
 	s.addHistory(joinMsg)
-	s.broadcast(joinMsg, "")
+	s.broadcast(joinMsg, "", "")
 
 	// Start the writer goroutine for each client.
 	go s.clientWriter(client)
@@ -138,7 +138,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 			name,
 			trimmedMsg)
 		s.addHistory(formattedMsg)
-		s.broadcast(formattedMsg, "")
+		s.broadcast(formattedMsg, "", name)
 	}
 
 	// Client disconnects.
@@ -147,14 +147,14 @@ func (s *Server) handleConnection(conn net.Conn) {
 	s.mu.Unlock()
 	leaveMsg := fmt.Sprintf("[%s][SERVER]: %s left our chat...", time.Now().Format("2006-01-02 15:04:05"), name)
 	s.addHistory(leaveMsg)
-	s.broadcast(leaveMsg, "")
+	s.broadcast(leaveMsg, "", "")
 	conn.Close()
 }
 
 // broadcast sends a message to clients.
 // If target is empty, it broadcasts to all connected clients.
 // If target is non-empty, it sends the message only to the client with that name (private message).
-func (s *Server) broadcast(message, target string) {
+func (s *Server) broadcast(message, target, exclude string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	//private message to target if specified
@@ -165,7 +165,10 @@ func (s *Server) broadcast(message, target string) {
 		return
 	}
 	//broadcast to all clients.
-	for _, client := range s.clients {
+	for name, client := range s.clients {
+		if name == exclude {
+			continue
+		}
 		client.out <- message
 	}
 }
