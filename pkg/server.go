@@ -46,8 +46,9 @@ func (s *Server) Start() error {
 		return err
 	}
 	// Inform server console about the port.
-	fmt.Printf("Listening on the port :%s\n", s.listenAddr[1:]) // remove leading ":"
+	fmt.Printf("Listening on the port :%s\n", s.listenAddr[1:])
 
+    //Accept loop
 	for {
 		conn, err := ln.Accept()
 		if err != nil {
@@ -59,7 +60,7 @@ func (s *Server) Start() error {
 	}
 }
 
-// server.go (only the high-level flow; helper methods below)
+// Connection handling (main parser)
 func (s *Server) handleConnection(conn net.Conn) {
 	defer conn.Close()
 
@@ -149,7 +150,7 @@ func (s *Server) registerClient(conn net.Conn, reader *bufio.Reader) (*Client, s
 		if len(s.clients) >= maxClients {
 			s.mu.Unlock()
 			conn.Write([]byte("Server full. Try later.\n"))
-			return nil, "", fmt.Errorf("server full")
+			return nil, "", fmt.Errorf("Server is full.")
 		}
 		if _, exists := s.clients[name]; exists {
 			s.mu.Unlock()

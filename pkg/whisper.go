@@ -21,16 +21,24 @@ func WhisperPrompt() string {
 // The sender's name is provided via senderName.
 // Returns true if the command was recognized and processed, false otherwise.
 func WhisperCommand(command string, s *Server, client *Client, senderName string) bool {
-	if strings.HasPrefix(command, "-w") || strings.HasPrefix(command, "-whisper") {
 		// Tokenize the command into its constituent parts.
 		tokens := strings.Fields(command)
-		if len(tokens) < 3 {
-			if tokens[0] == "-w" {
-				client.out <- WhisperPrompt()
-				return true
-			}
+		if len(tokens) == 0 {
 			return false
 		}
+
+    // Check if the first token is exactly "-w" or "-whisper"
+        cmd := tokens[0]
+        if cmd != "-w" && cmd != "-whisper" {
+            // Not a whisper command; let the caller treat it as a normal message.
+            return false
+        }
+
+    // Must have a second token for the new name
+    if len(tokens) < 2 {
+        client.out <- NamePrompt()
+        return true
+    }
 
 		// The second token is the recipient's name.
 		target := tokens[1]
@@ -56,7 +64,6 @@ func WhisperCommand(command string, s *Server, client *Client, senderName string
 
 		// Use the server's broadcast function to send the message only to the specified target.
 		s.broadcast(formattedMessage, target)
+	    s.broadcast(formattedMessage, senderName)
 		return true
 	}
-	return false
-}
