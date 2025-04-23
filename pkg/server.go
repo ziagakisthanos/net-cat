@@ -7,9 +7,27 @@ import (
 	"io"
 	"log"
 	"net"
+	"os"
 	"strings"
+	"sync"
 	"time"
 )
+
+// Client represents a connected chat user.
+type Client struct {
+	name string
+	conn net.Conn
+	out  chan string
+}
+
+// Server holds state for the chat server.
+type Server struct {
+	listenAddr string
+	mu         sync.Mutex
+	clients    map[string]*Client
+	history    []string
+	logFile    *os.File
+}
 
 // NewServer creates a new Server instance using the provided address.
 func NewServer(listenAddr string) *Server {
@@ -27,12 +45,11 @@ func (s *Server) Start() error {
 	if err != nil {
 		return err
 	}
-	s.ln = ln
 	// Inform server console about the port.
 	fmt.Printf("Listening on the port :%s\n", s.listenAddr[1:]) // remove leading ":"
 
 	for {
-		conn, err := s.ln.Accept()
+		conn, err := ln.Accept()
 		if err != nil {
 			log.Println("Accept error:", err)
 			continue
@@ -42,117 +59,109 @@ func (s *Server) Start() error {
 	}
 }
 
-// handleConnection manages the handshake and communication with a client.
+// server.go (only the high-level flow; helper methods below)
 func (s *Server) handleConnection(conn net.Conn) {
-	// Use bufio to read from the connection.
+	defer conn.Close()
+
 	reader := bufio.NewReader(conn)
-	// Send welcome banner + name prompt.
+
+	// 1️⃣ Register (handshake + name)
+	client, name, err := s.registerClient(conn, reader)
+	if err != nil {
+		return
+	}
+	defer s.deregisterClient(name, client)
+
+	// 2️⃣ Send existing history
+	s.sendHistory(client)
+
+	// 3️⃣ Announce join
+	s.announceJoin(name)
+
+	// 4️⃣ Start writer
+	go s.clientWriter(client)
+
+	// 5️⃣ Enter main read+broadcast loop
+	s.handleMessages(reader, client, &name)
+
+	// 6️⃣ Announce leave
+	s.announceLeave(name)
+}
+
+// handleMessages is the core per-client read loop.
+func (s *Server) handleMessages(reader *bufio.Reader, client *Client, name *string) {
+	for {
+		line, err := reader.ReadString('\n')
+		if err != nil {
+			if !errors.Is(err, io.EOF) {
+				log.Printf("Read error from %s: %v\n", *name, err)
+			}
+			return
+		}
+
+		// erase raw echo (ANSI only—make this optional/configurable)
+		client.conn.Write([]byte("\x1b[1A\r\x1b[K"))
+
+		text := strings.TrimSpace(line)
+		if !isMessageValid([]byte(text)) {
+			continue
+		}
+
+		// commands: whisper, help, name-change
+		if strings.HasPrefix(text, "-") {
+			switch {
+			case WhisperCommand(text, s, client, *name):
+			case HelpCommand(text, client):
+			case NameCommand(text, s, client, name):
+			default:
+				client.out <- text + " is not a command. try -h"
+			}
+			continue
+		}
+
+		// normal broadcast
+		msg := fmt.Sprintf("[%s][%s]: %s",
+			time.Now().Format("2006-01-02 15:04:05"),
+			*name,
+			text)
+		s.addHistory(msg)
+		s.broadcast(msg, "")
+	}
+}
+
+// registerClient does the name handshake and client-map insertion.
+func (s *Server) registerClient(conn net.Conn, reader *bufio.Reader) (*Client, string, error) {
 	conn.Write([]byte(welcomeBanner))
 
-	var name string
-	var client *Client
 	for {
-		// Read the client's name.
 		nameLine, err := reader.ReadString('\n')
 		if err != nil {
 			log.Println("Error reading name:", err)
-			conn.Close()
-			return
+			return nil, "", err
 		}
-		name = strings.TrimSpace(nameLine)
+		name := strings.TrimSpace(nameLine)
 		if !isMessageValid([]byte(name)) {
 			conn.Write([]byte("Invalid name. Please try again.\n"))
 			continue
 		}
 
-		// Lock the server state to check connection limits and uniqueness.
 		s.mu.Lock()
 		if len(s.clients) >= maxClients {
 			s.mu.Unlock()
-			conn.Write([]byte("Server full. Please try again later.\nConnection to server lost.\n"))
-			conn.Close()
-			return
+			conn.Write([]byte("Server full. Try later.\n"))
+			return nil, "", fmt.Errorf("server full")
 		}
 		if _, exists := s.clients[name]; exists {
 			s.mu.Unlock()
-			conn.Write([]byte("Name already taken. Please choose a different name.\n"))
+			conn.Write([]byte("Name taken. Choose another.\n"))
 			continue
 		}
-		// New client
-		client = &Client{
-			name: name,
-			conn: conn,
-			out:  make(chan string, 10),
-		}
+
+		client := &Client{name: name, conn: conn, out: make(chan string, 10)}
 		s.clients[name] = client
 		s.mu.Unlock()
-		break
+		return client, name, nil
 	}
-
-	// Send the full in-memory chat history to the new client.
-	for _, msg := range s.getHistory() {
-		client.out <- msg
-	}
-
-	// Broadcast that a new client has joined.
-	joinMsg := fmt.Sprintf("[%s][SERVER]: %s joined our chat...", time.Now().Format("2006-01-02 15:04:05"), name)
-	s.addHistory(joinMsg)
-	s.broadcast(joinMsg, "")
-
-	// Start the writer goroutine for each client.
-	go s.clientWriter(client)
-
-	// Read loop
-	for {
-		//block the loop until user hits enter
-		msgLine, err := reader.ReadString('\n')
-		if err != nil {
-			if !errors.Is(err, io.EOF) {
-				log.Printf("Read error from %s: %v\n", name, err)
-			}
-			break
-		}
-
-		trimmedMsg := strings.TrimSpace(msgLine)
-
-		if !isMessageValid([]byte(trimmedMsg)) {
-			// Do not process empty messages.
-			continue
-		}
-
-		//Handle tag commands
-		if strings.HasPrefix(trimmedMsg, "-") {
-			if WhisperCommand(trimmedMsg, s, client, name) {
-				continue
-			} else if HelpCommand(trimmedMsg, client) {
-				continue
-			} else if NameCommand(trimmedMsg, s, client, &name) {
-				continue
-			} else {
-				client.out <- trimmedMsg + " is not a chat command\n try -h for help"
-				continue
-			}
-		}
-
-		formattedMsg := fmt.Sprintf("[%s][%s]: %s",
-			time.Now().Format("2006-01-02 15:04:05"),
-			name,
-			trimmedMsg)
-		s.addHistory(formattedMsg)
-		s.broadcast(formattedMsg, "")
-
-		// erase the user’s terminal “raw” echo
-		_, _ = client.conn.Write([]byte("\x1b[1A\r\x1b[K"))
-	}
-
-	// Client disconnects.
-	s.mu.Lock()
-	delete(s.clients, name)
-	s.mu.Unlock()
-	leaveMsg := fmt.Sprintf("[%s][SERVER]: %s left our chat...", time.Now().Format("2006-01-02 15:04:05"), name)
-	s.addHistory(leaveMsg)
-	s.broadcast(leaveMsg, "")
-	conn.Close()
 }
 
 // broadcast sends a message to clients.
@@ -171,5 +180,34 @@ func (s *Server) broadcast(message, target string) {
 	//broadcast to all clients.
 	for _, client := range s.clients {
 		client.out <- message
+	}
+}
+
+// deregisterClient removes the client from the map and closes its out-channel.
+func (s *Server) deregisterClient(name string, client *Client) {
+	s.mu.Lock()
+	delete(s.clients, name)
+	s.mu.Unlock()
+	close(client.out)
+}
+
+func (s *Server) announceJoin(name string) {
+	joinMsg := fmt.Sprintf("[%s][SERVER]: %s joined our chat",
+		time.Now().Format("2006-01-02 15:04:05"), name)
+	s.addHistory(joinMsg)
+	s.broadcast(joinMsg, "")
+}
+
+func (s *Server) announceLeave(name string) {
+	leaveMsg := fmt.Sprintf("[%s][SERVER]: %s left our chat",
+		time.Now().Format("2006-01-02 15:04:05"), name)
+	s.addHistory(leaveMsg)
+	s.broadcast(leaveMsg, "")
+}
+
+// sendHistory streams the in-memory history down to this client.
+func (s *Server) sendHistory(client *Client) {
+	for _, msg := range s.getHistory() {
+		client.out <- msg
 	}
 }

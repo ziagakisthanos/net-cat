@@ -35,7 +35,7 @@ A simple TCP-based chat application written in Go, originally known as `TCP-Chat
    ```
 3. Build the server binary:
    ```bash
-   go build -o net-cat ./cmd/net-cat
+   go build -o TCPchat
    ```
 
 ---
@@ -44,10 +44,10 @@ A simple TCP-based chat application written in Go, originally known as `TCP-Chat
 
 ```
 # Run with default port (8989)
-./net-cat
+./TCPchat
 
 # Or specify a custom port
-./net-cat 9000
+./TCPchat 9000
 ```
 
 By default, the server listens on `:<port>`. Clients can connect using any TCP client, e.g.:
@@ -85,7 +85,6 @@ Once connected, follow on-screen prompts to enter your nickname and start chatti
 │   ├── logger.go
 │   ├── namechange.go
 │   ├── server.go
-│   ├── structs.go
 │   ├── validation.go
 │   └── whisper.go
 ├── go.mod
